@@ -9,7 +9,6 @@
 #include <atomic>
 #include <sys/wait.h>
 
-// ASCII градации
 static const std::string ASCII = " .:-=+*#%@";
 
 struct TermSize {
@@ -17,14 +16,11 @@ struct TermSize {
     int cols;
 };
 
-// --- глобальные флаги (signal-safe) ---
 static std::atomic<bool> g_stop(false);
 static std::atomic<bool> g_resized(true);
 
-// ffplay PID
 static pid_t g_audio_pid = -1;
 
-// --- signal handler ---
 void handle_signal(int sig) {
     if (sig == SIGINT || sig == SIGTERM) {
         g_stop = true;
@@ -63,31 +59,45 @@ inline char pixel_to_char(unsigned char p) {
     return ASCII[idx];
 }
 
-// запуск ffplay с fork/exec
-void start_audio() {
+// loop_audio == true -> ffplay -loop 0
+void start_audio(bool loop_audio) {
     pid_t pid = fork();
+
     if (pid == 0) {
-        execlp("ffplay", "ffplay",
-               "-nodisp",
-               "-autoexit",
-               "-loglevel", "quiet",
-               "bad_apple.wav",
-               (char*)NULL);
-        _exit(1); // если execlp не сработал
+        if (loop_audio) {
+            execlp(
+                "ffplay", "ffplay",
+                "-nodisp",
+                "-loglevel", "quiet",
+                "-loop", "0",
+                "bad_apple.wav",
+                (char*)NULL
+            );
+        } else {
+            execlp(
+                "ffplay", "ffplay",
+                "-nodisp",
+                "-autoexit",
+                "-loglevel", "quiet",
+                "bad_apple.wav",
+                (char*)NULL
+            );
+        }
+
+        _exit(1);
     } else if (pid > 0) {
         g_audio_pid = pid;
     }
 }
 
-// остановка аудио
 void stop_audio() {
     if (g_audio_pid > 0) {
         kill(g_audio_pid, SIGTERM);
         waitpid(g_audio_pid, NULL, 0);
+        g_audio_pid = -1;
     }
 }
 
-// безопасная очистка
 void cleanup() {
     const char* msg = "\033[2J\033[Hbye bye\n";
     write(STDOUT_FILENO, msg, std::strlen(msg));
@@ -97,15 +107,36 @@ int main(int argc, char** argv) {
     setup_signals();
 
     bool play_sound = false;
-
+    bool forever = false;
+    bool help = false;
+    
     for (int i = 1; i < argc; i++) {
-        if (std::strcmp(argv[i], "-s") == 0) {
+        if (
+            std::strcmp(argv[i], "--help") == 0
+        ) {
+            help = true;
+        }
+        if (
+            std::strcmp(argv[i], "-s") == 0 ||
+            std::strcmp(argv[i], "--song") == 0
+        ) {
             play_sound = true;
+        } else if (
+            std::strcmp(argv[i], "-f") == 0 ||
+            std::strcmp(argv[i], "--forever") == 0
+        ) {
+            forever = true;
         }
     }
 
+    if(help)
+    {
+        std::cout << "usage: badapple [-s | --song] [-f | --forever]\nPixelated view of badApple";
+        exit(0);
+    }
+
     if (play_sound) {
-        start_audio();
+        start_audio(forever);
     }
 
     cv::VideoCapture cap("bad_apple.mp4");
@@ -130,9 +161,17 @@ int main(int argc, char** argv) {
     int frame_idx = 0;
 
     while (!g_stop.load()) {
-        if (!cap.read(frame)) break;
+        if (!cap.read(frame)) {
+            if (forever) {
+                cap.set(cv::CAP_PROP_POS_FRAMES, 0);
+                start = now_sec();
+                frame_idx = 0;
+                continue;
+            } else {
+                break;
+            }
+        }
 
-        // обновляем размер только при SIGWINCH
         if (g_resized.exchange(false)) {
             ts = get_term_size();
         }
@@ -171,6 +210,7 @@ int main(int argc, char** argv) {
                     buffer += c;
                 }
             }
+
             buffer += '\n';
         }
 
