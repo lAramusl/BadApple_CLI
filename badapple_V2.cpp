@@ -9,6 +9,9 @@
 #include <atomic>
 #include <sys/wait.h>
 
+#define VIDEOPATH "/usr/local/share/badapple/bad_apple.mp4"
+#define AUDIOPATH "/usr/local/share/badapple/bad_apple.wav"
+
 static const std::string ASCII = " .:-=+*#%@";
 
 struct TermSize {
@@ -70,7 +73,7 @@ void start_audio(bool loop_audio) {
                 "-nodisp",
                 "-loglevel", "quiet",
                 "-loop", "0",
-                "bad_apple.wav",
+                AUDIOPATH,
                 (char*)NULL
             );
         } else {
@@ -79,7 +82,7 @@ void start_audio(bool loop_audio) {
                 "-nodisp",
                 "-autoexit",
                 "-loglevel", "quiet",
-                "bad_apple.wav",
+                AUDIOPATH,
                 (char*)NULL
             );
         }
@@ -109,37 +112,73 @@ int main(int argc, char** argv) {
     bool play_sound = false;
     bool forever = false;
     bool help = false;
-    
+
     for (int i = 1; i < argc; i++) {
-        if (
-            std::strcmp(argv[i], "--help") == 0
-        ) {
+        std::string arg = argv[i];
+
+        // long options
+        if (arg == "--help") {
             help = true;
-        }
-        if (
-            std::strcmp(argv[i], "-s") == 0 ||
-            std::strcmp(argv[i], "--song") == 0
-        ) {
+        } else if (arg == "--song") {
             play_sound = true;
-        } else if (
-            std::strcmp(argv[i], "-f") == 0 ||
-            std::strcmp(argv[i], "--forever") == 0
-        ) {
+        } else if (arg == "--forever") {
             forever = true;
+        }
+
+        // short bundled flags: -sf / -fs / -h
+        else if (arg.size() > 1 && arg[0] == '-') {
+            for (std::size_t j = 1; j < arg.size(); j++) {
+                char flag = arg[j];
+
+                switch (flag) {
+                    case 'h':
+                        help = true;
+                        break;
+
+                    case 's':
+                        play_sound = true;
+                        break;
+
+                    case 'f':
+                        forever = true;
+                        break;
+
+                    default:
+                        std::cerr
+                            << "badapple: unknown option -" 
+                            << flag << "\n"
+                            << "Try 'badapple --help'\n";
+                        return 1;
+                }
+            }
+        }
+
+        // unknown argument
+        else {
+            std::cerr
+                << "badapple: unknown option " 
+                << arg << "\n"
+                << "Try 'badapple --help'\n";
+            return 1;
         }
     }
 
-    if(help)
-    {
-        std::cout << "usage: badapple [-s | --song] [-f | --forever]\nPixelated view of badApple";
-        exit(0);
+    // help output
+    if (help) {
+        std::cout
+            << "usage: badapple [options]\n\n"
+            << "Options:\n"
+            << "  -h, --help       Show this help message\n"
+            << "  -s, --song       Play audio\n"
+            << "  -f, --forever    Loop forever\n";
+        return 0;
     }
 
     if (play_sound) {
         start_audio(forever);
     }
 
-    cv::VideoCapture cap("bad_apple.mp4");
+    cv::VideoCapture cap(VIDEOPATH);
     if (!cap.isOpened()) {
         std::cerr << "Failed to open video\n";
         return 1;
