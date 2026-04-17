@@ -1,6 +1,6 @@
 Badapple in your terminal for adhd reasons.
 
-It expects you to find video and audio and put it in destination folder.
+It expects you to find video and audio and put it in project folder.
 
 Requirements:
 OpenCV 4.6.0
