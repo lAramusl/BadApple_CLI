@@ -1,0 +1,7 @@
+[
+  {
+    "directory": "/путь/к/твоему/проекту",
+    "command": "g++ -std=c++17 -I/usr/include/opencv4 badapple.cpp",
+    "file": "badapple.cpp"
+  }
+]

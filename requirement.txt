@@ -1,0 +1,4 @@
+numpy
+opencv
+mutagen
+playsound==1.2.2 
